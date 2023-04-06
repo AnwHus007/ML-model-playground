@@ -1,2 +1,2 @@
-# ML-model-playground
-ML Streamlit Application to find best model and download it
+# ML-playground-app
+Welcome to ML Playground app! This platform is designed to provide you with a user-friendly interface for selecting and evaluating the best machine learning models for regression and classification tasks.This app features a range of algorithms and models that you can experiment with, including linear regression, decision trees, random forests and many more.Whether you're a beginner or an experienced data scientist,this app can help you quickly and easily compare the performance of different models on your dataset.With this app, you can explore the nuances of different algorithms and you can download the model that best fit your data.
