@@ -14,16 +14,16 @@ Welcome to ML Playground app! This platform is designed to provide you with a us
 * [WebApp:](https://anwhus007-ml-model-playground-home-letebd.streamlit.app)<br><br>
 ![Image](https://github.com/AnwHus007/ML-model-playground/blob/main/Images/Home.png)
 ## Instruction to use the app:
-> Select the ML Model type(Classification or Regression)
+* Select the ML Model type(Classification or Regression)<br>
 ![Image](https://github.com/AnwHus007/ML-model-playground/blob/main/Images/Model%20Select.png)
-> Upload the Dataset
+* Upload the Dataset
 ![Image](https://github.com/AnwHus007/ML-model-playground/blob/main/Images/Upload.png)<br>
-* Note: It is adviced to upload a Small or Normalised Dataset as it requires high computational power for going through every ML model 
-> Run a profile report on the Dataset
+> Note: It is adviced to upload a Small or Normalised Dataset as it requires high computational power for going through every ML model 
+* Run a profile report on the Dataset
 ![Image](https://github.com/AnwHus007/ML-model-playground/blob/main/Images/Profiling.png)
-> Choose the target variable to be predicted
+* Choose the target variable to be predicted
 ![Image](https://github.com/AnwHus007/ML-model-playground/blob/main/Images/Modelling_1.png)
-> See the comparions
+* See the comparions
 ![Image](https://github.com/AnwHus007/ML-model-playground/blob/main/Images/Modelling_2.png)
-> Download the best model
+* Download the best model
 ![Image](https://github.com/AnwHus007/ML-model-playground/blob/main/Images/Download.png)
