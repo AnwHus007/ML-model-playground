@@ -3,6 +3,11 @@ Welcome to ML Playground app! This platform is designed to provide you with a us
 ![Image](https://github.com/AnwHus007/ML-model-playground/blob/main/Images/Home%20Ui.png)
 ## How to use:
 * Clone repository to local machine and open directory src.<br>
+Install requirments
+```
+ pip install -r requirements.txt
+```
+Run the app
 ```
  streamlit run Home.py
 ```
