@@ -25,5 +25,5 @@ Welcome to ML Playground app! This platform is designed to provide you with a us
 ![Image](https://github.com/AnwHus007/ML-model-playground/blob/main/Images/Modelling_1.png)
 * See the comparions
 ![Image](https://github.com/AnwHus007/ML-model-playground/blob/main/Images/Modelling_2.png)
-* Download the best model(pkl file)
+* Download the best model(.pkl file)
 ![Image](https://github.com/AnwHus007/ML-model-playground/blob/main/Images/Download.png)
