@@ -10,38 +10,36 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Scikit-learn imports
-from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
-from sklearn.preprocessing import StandardScaler, LabelEncoder, RobustScaler, MinMaxScaler
+from sklearn.model_selection import train_test_split, cross_val_score, KFold
+from sklearn.preprocessing import StandardScaler, RobustScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
-from sklearn.metrics import (accuracy_score, precision_score, recall_score, 
-                            f1_score, roc_auc_score, confusion_matrix, 
-                            classification_report, matthews_corrcoef, cohen_kappa_score)
+from sklearn.metrics import (mean_absolute_error, mean_squared_error, r2_score, 
+                             mean_absolute_percentage_error)
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
 
-# Model imports
-from sklearn.linear_model import LogisticRegression, RidgeClassifier
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import (RandomForestClassifier, GradientBoostingClassifier, 
-                              AdaBoostClassifier, ExtraTreesClassifier, BaggingClassifier)
-from sklearn.svm import SVC
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
-from xgboost import XGBClassifier
-from lightgbm import LGBMClassifier
-from catboost import CatBoostClassifier
+# Regression Model imports
+from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet, HuberRegressor, BayesianRidge
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import (RandomForestRegressor, GradientBoostingRegressor, 
+                              AdaBoostRegressor, ExtraTreesRegressor)
+from sklearn.neighbors import KNeighborsRegressor
+from xgboost import XGBRegressor
+from lightgbm import LGBMRegressor
+from catboost import CatBoostRegressor
 
 # Check if dataset exists
 if os.path.exists('./dataset.csv'): 
     df = pd.read_csv('dataset.csv', index_col=None)
 
-st.set_page_config(page_title="AutoML Classification", layout="wide")
+st.set_page_config(page_title="AutoML Regression", layout="wide")
 
 # Sidebar
 with st.sidebar: 
-    st.image("https://static.javatpoint.com/tutorial/machine-learning/images/classification-algorithm-in-machine-learning.png")
-    st.title("AutoML Classification")
+    st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Linear_regression.svg/1200px-Linear_regression.svg.png")
+    st.title("AutoML Regression")
     choice = st.radio("Navigation", ["Upload", "Profiling", "Modelling", "Download"])
-    st.info("This application helps you build and explore your classification models.")
+    st.info("This application helps you build and explore your regression models.")
 
 # Helper Functions
 def generate_profile_report(dataframe):
@@ -63,34 +61,18 @@ def generate_profile_report(dataframe):
     
     return profile, numeric_cols, categorical_cols
 
-def detect_data_types(dataframe):
-    """Detect and categorize column types"""
-    dtypes_info = {}
-    for col in dataframe.columns:
-        if dataframe[col].dtype in ['int64', 'float64']:
-            dtypes_info[col] = 'numeric'
-        else:
-            dtypes_info[col] = 'categorical'
-    return dtypes_info
-
 def preprocess_data(dataframe, target_column, test_size=0.2, random_state=42):
-    """Preprocess data similar to PyCaret setup"""
+    """Preprocess data for regression"""
     
     # Separate features and target
     X = dataframe.drop(columns=[target_column])
     y = dataframe[target_column]
     
-    # Encode target if categorical
-    label_encoder = None
-    if y.dtype == 'object' or y.dtype.name == 'category':
-        label_encoder = LabelEncoder()
-        y = label_encoder.fit_transform(y)
-    
     # Identify numeric and categorical columns
     numeric_features = X.select_dtypes(include=[np.number]).columns.tolist()
     categorical_features = X.select_dtypes(include=['object', 'category']).columns.tolist()
     
-    # Handle missing values
+    # Handle missing values & Encoding
     # Numeric columns - impute with median
     if numeric_features:
         numeric_imputer = SimpleImputer(strategy='median')
@@ -98,23 +80,28 @@ def preprocess_data(dataframe, target_column, test_size=0.2, random_state=42):
     else:
         numeric_imputer = None
     
-    # Categorical columns - impute with mode and encode
+    # Categorical columns - impute with mode and One-Hot Encode
     if categorical_features:
+        # Impute
         categorical_imputer = SimpleImputer(strategy='most_frequent')
         X[categorical_features] = categorical_imputer.fit_transform(X[categorical_features])
         
-        # One-hot encode categorical variables
+        # One-hot encode (drop_first to avoid multicollinearity in linear models)
         X = pd.get_dummies(X, columns=categorical_features, drop_first=True)
     else:
         categorical_imputer = None
     
     # Split data
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=y
+        X, y, test_size=test_size, random_state=random_state
     )
     
-    # Scale numeric features
+    # Scale numeric features (Important for Linear/SVM/KNN models)
+    # We fit on train and transform on test to avoid leakage
     scaler = StandardScaler()
+    
+    # We only scale the columns that were originally numeric (or all if we want)
+    # For simplicity in this auto-tool, we scale everything after encoding
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled = scaler.transform(X_test)
     
@@ -128,34 +115,34 @@ def preprocess_data(dataframe, target_column, test_size=0.2, random_state=42):
         'numeric_imputer': numeric_imputer,
         'categorical_imputer': categorical_imputer,
         'scaler': scaler,
-        'label_encoder': label_encoder,
         'feature_names': X_train.columns.tolist()
     }
     
     return X_train_scaled, X_test_scaled, y_train, y_test, preprocessing_info
 
 def get_model_list():
-    """Return a dictionary of classification models"""
+    """Return a dictionary of regression models"""
     models = {
-        'Logistic Regression': LogisticRegression(max_iter=1000, random_state=42),
-        'K Neighbors Classifier': KNeighborsClassifier(),
-        'Naive Bayes': GaussianNB(),
-        'Decision Tree': DecisionTreeClassifier(random_state=42),
-        'Random Forest': RandomForestClassifier(n_estimators=100, random_state=42),
-        'Extra Trees': ExtraTreesClassifier(n_estimators=100, random_state=42),
-        'Gradient Boosting': GradientBoostingClassifier(random_state=42),
-        'AdaBoost': AdaBoostClassifier(random_state=42),
-        'LightGBM': LGBMClassifier(random_state=42, verbose=-1),
-        'XGBoost': XGBClassifier(random_state=42, eval_metric='logloss'),
-        'CatBoost': CatBoostClassifier(random_state=42, verbose=0),
-        'Linear Discriminant Analysis': LinearDiscriminantAnalysis(),
-        'Ridge Classifier': RidgeClassifier(random_state=42),
-        'SVM - Linear': SVC(kernel='linear', random_state=42, probability=True),
+        'Linear Regression': LinearRegression(),
+        'Ridge': Ridge(random_state=42),
+        'Lasso': Lasso(random_state=42),
+        'Elastic Net': ElasticNet(random_state=42),
+        'Huber Regressor': HuberRegressor(),
+        'K Neighbors Regressor': KNeighborsRegressor(),
+        'Decision Tree': DecisionTreeRegressor(random_state=42),
+        'Random Forest': RandomForestRegressor(n_estimators=100, random_state=42),
+        'Extra Trees': ExtraTreesRegressor(n_estimators=100, random_state=42),
+        'Gradient Boosting': GradientBoostingRegressor(random_state=42),
+        'AdaBoost': AdaBoostRegressor(random_state=42),
+        'LightGBM': LGBMRegressor(random_state=42, verbose=-1),
+        'XGBoost': XGBRegressor(random_state=42, eval_metric='rmse'),
+        'CatBoost': CatBoostRegressor(random_state=42, verbose=0),
+        'Bayesian Ridge': BayesianRidge(),
     }
     return models
 
 def evaluate_model(model, X_train, X_test, y_train, y_test, cv_folds=10):
-    """Evaluate a single model with cross-validation"""
+    """Evaluate a single regression model"""
     
     # Train model
     model.fit(X_train, y_train)
@@ -163,28 +150,39 @@ def evaluate_model(model, X_train, X_test, y_train, y_test, cv_folds=10):
     # Predictions
     y_pred = model.predict(X_test)
     
-    # Cross-validation scores
+    # Cross-validation scores (using R2)
     cv_scores = cross_val_score(model, X_train, y_train, 
-                                cv=StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42),
-                                scoring='accuracy')
+                                cv=KFold(n_splits=cv_folds, shuffle=True, random_state=42),
+                                scoring='r2')
     
     # Calculate metrics
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    mae = mean_absolute_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+    mape = mean_absolute_percentage_error(y_test, y_pred)
+    
+    # RMSLE (Root Mean Squared Logarithmic Error) - handle negative values safely
+    try:
+        rmsle = np.sqrt(mean_squared_error(np.log1p(y_test), np.log1p(y_pred)))
+    except:
+        rmsle = np.nan
+    
     metrics = {
-        'Accuracy': accuracy_score(y_test, y_pred),
-        'AUC': roc_auc_score(y_test, model.predict_proba(X_test)[:, 1]) if hasattr(model, 'predict_proba') and len(np.unique(y_test)) == 2 else np.nan,
-        'Recall': recall_score(y_test, y_pred, average='weighted'),
-        'Precision': precision_score(y_test, y_pred, average='weighted', zero_division=0),
-        'F1': f1_score(y_test, y_pred, average='weighted'),
-        'Kappa': cohen_kappa_score(y_test, y_pred),
-        'MCC': matthews_corrcoef(y_test, y_pred),
-        'CV_Mean': cv_scores.mean(),
+        'R2': r2,
+        'RMSE': rmse,
+        'MAE': mae,
+        'MSE': mse,
+        'MAPE': mape,
+        'RMSLE': rmsle,
+        'CV_R2_Mean': cv_scores.mean(),
         'CV_Std': cv_scores.std(),
     }
     
     return metrics, model
 
 def compare_all_models(X_train, X_test, y_train, y_test, cv_folds=10):
-    """Compare all models and return results"""
+    """Compare all regression models"""
     
     models = get_model_list()
     results = []
@@ -216,16 +214,16 @@ def compare_all_models(X_train, X_test, y_train, y_test, cv_folds=10):
     results_df = pd.DataFrame(results)
     
     # Reorder columns
-    col_order = ['Model', 'Accuracy', 'AUC', 'Recall', 'Precision', 'F1', 'Kappa', 'MCC', 'CV_Mean', 'CV_Std']
+    col_order = ['Model', 'R2', 'RMSE', 'MAE', 'MAPE', 'MSE', 'RMSLE', 'CV_R2_Mean', 'CV_Std']
     results_df = results_df[col_order]
     
-    # Sort by accuracy
-    results_df = results_df.sort_values('Accuracy', ascending=False).reset_index(drop=True)
+    # Sort by R2 (Descending)
+    results_df = results_df.sort_values('R2', ascending=False).reset_index(drop=True)
     
     return results_df, trained_models
 
 def create_setup_dataframe(X_train, y_train, preprocessing_info):
-    """Create a setup summary DataFrame similar to PyCaret"""
+    """Create a setup summary DataFrame"""
     
     setup_data = {
         'Description': [
@@ -249,7 +247,7 @@ def create_setup_dataframe(X_train, y_train, preprocessing_info):
         'Value': [
             '42',
             'Target Variable',
-            'Binary/Multiclass',
+            'Regression',
             f"{X_train.shape[0] + X_train.shape[0]//4} x {len(preprocessing_info['numeric_features']) + len(preprocessing_info['categorical_features'])}",
             f"{X_train.shape[0] + X_train.shape[0]//4} x {X_train.shape[1]}",
             f"{X_train.shape[0]} x {X_train.shape[1]}",
@@ -261,7 +259,7 @@ def create_setup_dataframe(X_train, y_train, preprocessing_info):
             'mode',
             'True',
             'zscore',
-            'StratifiedKFold',
+            'KFold',
             '10'
         ]
     }
@@ -271,7 +269,7 @@ def create_setup_dataframe(X_train, y_train, preprocessing_info):
 # Main App Logic
 if choice == "Upload":
     st.title("📤 Upload Your Dataset")
-    st.write("Upload a CSV file to begin your classification analysis.")
+    st.write("Upload a CSV file to begin your regression analysis.")
     
     file = st.file_uploader("Choose a CSV file", type=['csv'])
     
@@ -357,129 +355,141 @@ elif choice == "Profiling":
                 fig.update_layout(height=300*n_rows, showlegend=False)
                 st.plotly_chart(fig, use_container_width=True)
         
-        # Categorical features
-        if categorical_cols:
-            st.header("Categorical Features Distribution")
-            
-            selected_cat = st.selectbox("Select a categorical column", categorical_cols)
-            
-            if selected_cat:
-                value_counts = df[selected_cat].value_counts().head(20)
-                
-                fig = px.bar(x=value_counts.index, y=value_counts.values,
-                           labels={'x': selected_cat, 'y': 'Count'},
-                           title=f'Distribution of {selected_cat}')
-                st.plotly_chart(fig, use_container_width=True)
-        
-        # Correlation matrix for numeric features
+        # Correlation matrix
         if len(numeric_cols) > 1:
             st.header("Correlation Matrix")
-            
             corr_matrix = df[numeric_cols].corr()
-            
             fig = px.imshow(corr_matrix,
                           labels=dict(color="Correlation"),
                           x=corr_matrix.columns,
                           y=corr_matrix.columns,
                           color_continuous_scale='RdBu_r',
                           aspect="auto")
-            
             fig.update_layout(title="Feature Correlation Heatmap")
             st.plotly_chart(fig, use_container_width=True)
-        
-        # Statistical summary
-        st.header("Statistical Summary")
-        st.dataframe(df.describe())
 
 elif choice == "Modelling":
     if 'df' not in locals():
         st.error("⚠️ Please upload a dataset first!")
     else:
-        st.title("🤖 Model Training & Comparison")
+        st.title("🤖 Regression Modelling")
         
-        col1, col2 = st.columns([2, 1])
+        # Identify numeric columns for target selection
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         
-        with col1:
-            chosen_target = st.selectbox('🎯 Choose the Target Column', df.columns)
-        
-        with col2:
-            cv_folds = st.slider('Cross-Validation Folds', 3, 15, 10)
-        
-        if st.button('🚀 Run Modelling', type='primary', use_container_width=True):
+        if not numeric_cols:
+            st.error("❌ No numeric columns found in the dataset! Regression requires a numeric target.")
+        else:
+            col1, col2 = st.columns([2, 1])
             
-            with st.spinner('Preprocessing data...'):
-                # Preprocess data
-                X_train, X_test, y_train, y_test, preprocessing_info = preprocess_data(
-                    df, chosen_target
-                )
-                
-                # Create setup DataFrame
-                setup_df = create_setup_dataframe(X_train, y_train, preprocessing_info)
-                
-                st.success("✅ Data preprocessing completed!")
-                
-                st.subheader("Setup Configuration")
-                st.dataframe(setup_df, use_container_width=True)
+            with col1:
+                chosen_target = st.selectbox('🎯 Choose the Target Column', numeric_cols)
             
-            st.divider()
+            with col2:
+                cv_folds = st.slider('Cross-Validation Folds', 3, 15, 10)
             
-            with st.spinner('Training and comparing models... This may take a few minutes.'):
-                # Compare models
-                results_df, trained_models = compare_all_models(
-                    X_train, X_test, y_train, y_test, cv_folds
-                )
+            if st.button('🚀 Run Modelling', type='primary', use_container_width=True):
                 
-                st.success("✅ Model training completed!")
+                with st.spinner('Preprocessing data...'):
+                    # Preprocess data
+                    X_train, X_test, y_train, y_test, preprocessing_info = preprocess_data(
+                        df, chosen_target
+                    )
+                    
+                    # Create setup DataFrame
+                    setup_df = create_setup_dataframe(X_train, y_train, preprocessing_info)
+                    
+                    st.success("✅ Data preprocessing completed!")
+                    
+                    st.subheader("Setup Configuration")
+                    st.dataframe(setup_df, use_container_width=True)
                 
-                st.subheader("Model Comparison Results")
+                st.divider()
                 
-                # Style the dataframe
-                styled_df = results_df.style.background_gradient(
-                    subset=['Accuracy', 'AUC', 'Recall', 'Precision', 'F1', 'Kappa', 'MCC'],
-                    cmap='RdYlGn'
-                ).format({
-                    'Accuracy': '{:.4f}',
-                    'AUC': '{:.4f}',
-                    'Recall': '{:.4f}',
-                    'Precision': '{:.4f}',
-                    'F1': '{:.4f}',
-                    'Kappa': '{:.4f}',
-                    'MCC': '{:.4f}',
-                    'CV_Mean': '{:.4f}',
-                    'CV_Std': '{:.4f}'
-                })
-                
-                st.dataframe(styled_df, use_container_width=True)
-                
-                # Get best model
-                best_model_name = results_df.iloc[0]['Model']
-                best_model = trained_models[best_model_name]
-                
-                st.success(f"🏆 Best Model: **{best_model_name}** with Accuracy: **{results_df.iloc[0]['Accuracy']:.4f}**")
-                
-                # Visualization
-                st.subheader("Model Performance Visualization")
-                
-                # Accuracy comparison
-                fig = px.bar(results_df, x='Model', y='Accuracy',
-                           title='Model Accuracy Comparison',
-                           color='Accuracy',
-                           color_continuous_scale='Viridis')
-                fig.update_layout(xaxis_tickangle=-45)
-                st.plotly_chart(fig, use_container_width=True)
-                
-                # Save best model with preprocessing info
-                model_package = {
-                    'model': best_model,
-                    'preprocessing_info': preprocessing_info,
-                    'model_name': best_model_name,
-                    'metrics': results_df.iloc[0].to_dict()
-                }
-                
-                with open('best_model.pkl', 'wb') as f:
-                    pickle.dump(model_package, f)
-                
-                st.info("💾 Best model saved successfully! Go to the Download tab to download it.")
+                with st.spinner('Training and comparing models... This may take a few minutes.'):
+                    # Compare models
+                    results_df, trained_models = compare_all_models(
+                        X_train, X_test, y_train, y_test, cv_folds
+                    )
+                    
+                    st.success("✅ Model training completed!")
+                    
+                    st.subheader("Model Comparison Results")
+                    
+                    # Style the dataframe (Higher R2 is Green, Lower RMSE/MAE is Green)
+                    styled_df = results_df.style.background_gradient(
+                        subset=['R2'], cmap='RdYlGn'
+                    ).background_gradient(
+                        subset=['RMSE', 'MAE', 'MSE', 'MAPE'], cmap='RdYlGn_r'
+                    ).format({
+                        'R2': '{:.4f}',
+                        'RMSE': '{:.4f}',
+                        'MAE': '{:.4f}',
+                        'MSE': '{:.4f}',
+                        'MAPE': '{:.4f}',
+                        'RMSLE': '{:.4f}',
+                        'CV_R2_Mean': '{:.4f}',
+                        'CV_Std': '{:.4f}'
+                    })
+                    
+                    st.dataframe(styled_df, use_container_width=True)
+                    
+                    # Get best model
+                    best_model_name = results_df.iloc[0]['Model']
+                    best_model = trained_models[best_model_name]
+                    
+                    st.success(f"🏆 Best Model: **{best_model_name}** with R2: **{results_df.iloc[0]['R2']:.4f}**")
+                    
+                    # Visualization
+                    st.subheader("Model Performance Visualization")
+                    
+                    # 1. Comparison Plot
+                    fig1 = px.bar(results_df, x='Model', y='R2',
+                               title='Model R2 Score Comparison',
+                               color='R2',
+                               color_continuous_scale='Viridis')
+                    fig1.update_layout(xaxis_tickangle=-45)
+                    st.plotly_chart(fig1, use_container_width=True)
+                    
+                    # 2. Prediction vs Actual Plot (Best Model)
+                    st.subheader(f"Analysis for {best_model_name}")
+                    y_pred = best_model.predict(X_test)
+                    
+                    col_p1, col_p2 = st.columns(2)
+                    
+                    with col_p1:
+                        # Scatter Plot: Actual vs Predicted
+                        fig_scatter = px.scatter(x=y_test, y=y_pred, 
+                                               labels={'x': 'Actual Values', 'y': 'Predicted Values'},
+                                               title='Actual vs. Predicted Values')
+                        # Add perfect prediction line
+                        min_val = min(min(y_test), min(y_pred))
+                        max_val = max(max(y_test), max(y_pred))
+                        fig_scatter.add_shape(type="line", x0=min_val, y0=min_val, x1=max_val, y1=max_val,
+                                            line=dict(color="Red", dash="dash"))
+                        st.plotly_chart(fig_scatter, use_container_width=True)
+                        
+                    with col_p2:
+                        # Residual Plot
+                        residuals = y_test - y_pred
+                        fig_resid = px.scatter(x=y_pred, y=residuals,
+                                             labels={'x': 'Predicted Values', 'y': 'Residuals'},
+                                             title='Residual Plot')
+                        fig_resid.add_hline(y=0, line_dash="dash", line_color="red")
+                        st.plotly_chart(fig_resid, use_container_width=True)
+
+                    # Save best model
+                    model_package = {
+                        'model': best_model,
+                        'preprocessing_info': preprocessing_info,
+                        'model_name': best_model_name,
+                        'metrics': results_df.iloc[0].to_dict()
+                    }
+                    
+                    with open('best_model.pkl', 'wb') as f:
+                        pickle.dump(model_package, f)
+                    
+                    st.info("💾 Best model saved successfully! Go to the Download tab to download it.")
 
 elif choice == "Download":
     st.title("⬇️ Download Trained Model")
@@ -496,8 +506,8 @@ elif choice == "Download":
         with col1:
             st.subheader("Model Information")
             st.write(f"**Model Type:** {model_package['model_name']}")
-            st.write(f"**Accuracy:** {model_package['metrics']['Accuracy']:.4f}")
-            st.write(f"**F1 Score:** {model_package['metrics']['F1']:.4f}")
+            st.write(f"**R2 Score:** {model_package['metrics']['R2']:.4f}")
+            st.write(f"**RMSE:** {model_package['metrics']['RMSE']:.4f}")
         
         with col2:
             st.subheader("Download")
@@ -505,7 +515,7 @@ elif choice == "Download":
                 st.download_button(
                     label='📥 Download Model Package',
                     data=f,
-                    file_name="best_model.pkl",
+                    file_name="best_regression_model.pkl",
                     mime="application/octet-stream",
                     use_container_width=True
                 )
